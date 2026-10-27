@@ -1,0 +1,37 @@
+{
+  "manifest_version": 2,
+  "name": "keyboard navigation",
+  "version": "0.2.3",
+  "description": "Navegação por teclado do Vorgan Vault no Firefox: F clica com dicas de letras, d e u rolam, x fecha a aba, X recupera, b pesquisa no Google nesta aba, t abre uma aba nova.",
+  "permissions": [
+    "sessions"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "teclado.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "teclado@vorgan",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      },
+      "update_url": "https://raw.githubusercontent.com/vvwxx/teclado-firefox/main/updates.json"
+    }
+  }
+}
