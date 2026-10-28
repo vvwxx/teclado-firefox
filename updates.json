@@ -5,6 +5,10 @@
         {
           "version": "0.2.4",
           "update_link": "https://github.com/vvwxx/teclado-firefox/releases/download/v0.2.4/teclado-0.2.4.xpi"
+        },
+        {
+          "version": "0.2.5",
+          "update_link": "https://github.com/vvwxx/teclado-firefox/releases/download/v0.2.5/teclado-0.2.5.xpi"
         }
       ]
     }

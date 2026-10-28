@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
   "name": "keyboard navigation",
-  "version": "0.2.4",
-  "description": "Navegação por teclado do Vorgan Vault no Firefox: F clica com dicas de letras, d e u rolam, x fecha a aba, X recupera, b pesquisa no Google nesta aba, t abre uma aba nova.",
+  "version": "0.2.5",
+  "description": "Navegação por teclado do Vorgan Vault no Firefox: F clica com dicas de letras, d e u rolam, x fecha a aba, X recupera, b pesquisa no Google ou abre o site digitado nesta aba, t abre uma aba nova, r recarrega a página.",
   "permissions": [
     "sessions"
   ],

@@ -17,6 +17,19 @@ const CURSORES = new Set(["pointer", "zoom-in", "zoom-out", "grab"]);
 
 const GOOGLE = "https://www.google.com/search?q=";
 
+// Texto sem espaço com cara de endereço (globo.com, uol.com.br/esporte, https://...) vai direto pro site.
+// Terminações de arquivo ficam de fora, para "node.js" ou "relatorio.pdf" continuarem sendo pesquisa.
+const SITE = /^(https?:\/\/)?(localhost|([a-z0-9-]+\.)+[a-z]{2,})(:\d+)?([/?#]\S*)?$/i;
+const ARQUIVOS = new Set(["js", "ts", "py", "md", "txt", "pdf", "json", "html", "css", "exe", "zip", "png", "jpg"]);
+
+function destino(texto) {
+  const m = texto.match(SITE);
+  const fim = m?.[2].split(".").pop().toLowerCase();
+  if (!m || (!m[1] && ARQUIVOS.has(fim))) return GOOGLE + encodeURIComponent(texto);
+  if (m[1]) return texto;
+  return (m[2].toLowerCase() === "localhost" ? "http://" : "https://") + texto;
+}
+
 let painel = null;
 let dicas = null;
 // Teclas que viraram comando: o keyup delas também não pode chegar na página.
@@ -28,6 +41,7 @@ const ACOES = {
   x: () => pedir("fechar"),
   X: () => pedir("recuperar"),
   t: () => pedir("novaAba"),
+  r: () => location.reload(),
   b: () => abrirPesquisa(),
   f: () => mostrarDicas(),
   F: () => mostrarDicas(),
@@ -76,7 +90,7 @@ function rolar(sentido) {
   alvo.scrollBy({ top: sentido * altura / 2, behavior: "smooth" });
 }
 
-// Janela no centro da tela para pesquisar no Google nesta aba. Esc fecha.
+// Janela no centro da tela para pesquisar no Google ou abrir um site nesta aba. Esc fecha.
 function abrirPesquisa() {
   if (painel) fecharPesquisa();
   const host = document.createElement("div");
@@ -94,7 +108,7 @@ function abrirPesquisa() {
       input:focus { box-shadow:0 0 0 1px #ff3b30; }
     </style>
     <div class="fundo"><div class="caixa">
-      <input placeholder="Digite e aperte Enter">
+      <input placeholder="Pesquise ou digite um site e aperte Enter">
     </div></div>`;
   document.documentElement.append(host);
   const campo = raiz.querySelector("input");
@@ -118,7 +132,7 @@ function teclaNaPesquisa(e) {
   const texto = painel.campo.value.trim();
   if (!texto) return;
   fecharPesquisa();
-  location.assign(GOOGLE + encodeURIComponent(texto));
+  location.assign(destino(texto));
 }
 
 function fecharPesquisa() {
@@ -144,12 +158,11 @@ function mostrarDicas() {
   const nomes = [];
   // A primeira letra varia antes da segunda, para as dicas não começarem todas com a mesma tecla.
   for (const b of LETRAS) for (const a of LETRAS) nomes.push(a + b);
-  const itens = alvos.slice(0, nomes.length).map((el, i) => {
-    const r = el.getBoundingClientRect();
+  const itens = alvos.slice(0, nomes.length).map(({ el, x, y }, i) => {
     const tag = document.createElement("div");
     tag.className = "dica";
-    tag.style.left = Math.max(0, r.left - 4) + "px";
-    tag.style.top = Math.max(0, r.top - 4) + "px";
+    tag.style.left = Math.max(0, x) + "px";
+    tag.style.top = Math.max(0, y) + "px";
     raiz.append(tag);
     return { el, nome: nomes[i], tag };
   });
@@ -194,33 +207,55 @@ function fecharDicas() {
 function clicar(el) {
   if (editavel(el)) return el.focus();
   el.focus?.({ preventScroll: true });
-  const opts = { bubbles: true, cancelable: true, view: window };
+  // Sites em React (X, WhatsApp) costumam ouvir os eventos de ponteiro, e alguns olham a posição do clique.
+  const r = el.getBoundingClientRect();
+  const opts = { bubbles: true, cancelable: true, composed: true, view: window,
+                 clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+  el.dispatchEvent(new PointerEvent("pointerdown", opts));
   el.dispatchEvent(new MouseEvent("mousedown", opts));
+  el.dispatchEvent(new PointerEvent("pointerup", opts));
   el.dispatchEvent(new MouseEvent("mouseup", opts));
   el.click();
 }
 
-// Só o que está na tela e não está coberto por outra coisa; dentro de um item clicável, fica o de fora.
+const foraDaTela = (r) => r.bottom < 0 || r.right < 0 || r.top > innerHeight || r.left > innerWidth;
+const mesmoTamanho = (a, b) =>
+  Math.abs(a.left - b.left) < 6 && Math.abs(a.top - b.top) < 6 && Math.abs(a.right - b.right) < 6 && Math.abs(a.bottom - b.bottom) < 6;
+
+// Só o que está na tela e não está coberto por outra coisa. Devolve cada alvo com o ponto da dica.
 function visiveis() {
   const candidatos = new Set(document.querySelectorAll(CLICAVEIS));
   // Além da lista, vale o que tem cursor de mãozinha (sites que fazem botão com div).
+  // Os filhos herdam o cursor, então só conta o elemento onde ele começa.
   for (const el of document.body?.querySelectorAll("div, span, img, li, svg") ?? []) {
-    if (candidatos.has(el)) continue;
-    const r = el.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
-    if (CURSORES.has(getComputedStyle(el).cursor)) candidatos.add(el);
+    if (candidatos.has(el) || foraDaTela(el.getBoundingClientRect())) continue;
+    const cursor = getComputedStyle(el).cursor;
+    if (!CURSORES.has(cursor)) continue;
+    if (el.parentElement && getComputedStyle(el.parentElement).cursor === cursor) continue;
+    candidatos.add(el);
   }
   const vistos = [];
   for (const el of candidatos) {
     const r = el.getBoundingClientRect();
-    if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.right < 0 || r.top > innerHeight || r.left > innerWidth) continue;
+    if (r.width < 4 || r.height < 4 || foraDaTela(r)) continue;
     const x = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2));
     const y = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
     const topo = document.elementFromPoint(x, y);
     if (!topo || !(el === topo || el.contains(topo) || topo.contains(el))) continue;
-    if (vistos.some((v) => v.contains(el))) continue;
-    for (let i = vistos.length - 1; i >= 0; i--) if (el.contains(vistos[i])) vistos.splice(i, 1);
-    vistos.push(el);
+    vistos.push({ el, r });
   }
-  return vistos;
+  // Um clicável dentro do outro (o curtir dentro do tweet, a conversa dentro da lista do WhatsApp):
+  // os de dentro ganham dica. O de fora só mantém a sua se for um item de verdade, como o tweet,
+  // e ela vai no meio da borda esquerda para não cair em cima da dica do primeiro filho.
+  // Embrulho do mesmo tamanho do filho não ganha dica; moldura de meia tela também não.
+  const metade = innerWidth * innerHeight / 2;
+  const alvos = [];
+  for (const v of vistos) {
+    const dentro = vistos.filter((o) => o !== v && v.el.contains(o.el));
+    if (dentro.some((o) => mesmoTamanho(v.r, o.r))) continue;
+    if (dentro.length && v.r.width * v.r.height > metade) continue;
+    const meio = (Math.max(0, v.r.top) + Math.min(innerHeight, v.r.bottom)) / 2;
+    alvos.push({ el: v.el, x: v.r.left - 4, y: dentro.length ? meio - 8 : v.r.top - 4 });
+  }
+  return alvos;
 }
